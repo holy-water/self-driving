@@ -20,3 +20,33 @@ To_middle < self.half_road_limit
 - 이미 피할 수 있는 상황인지 판단
 
 - 양 옆 박는 상황에 대한 판단 
+
+#### 19.7.16 연븐's 낙서 
+> 자율주행 소스에서 참고할만한 것들 정리
+
+1. 샘플 <s, a, r, s'>을 리플레이 메모리에 저장
+<pre><code>def append_sample(self, state, action, reward, next_state, done):
+	self.memory.append((state, action, reward, next_state, done))
+</code></pre>
+
+2. 차량 상태 class
+<pre><code>class CarState:
+    def __init__(self, name):
+        self.__name = name
+
+    collided = False
+    collision_distance = 0
+    speed = 0
+    to_middle = 0
+    moving_angle = 0
+
+    moving_forward = True
+    lap_progress = 0
+    track_forward_angles = []
+    track_forward_obstacles = []
+</code></pre>
+
+3. 센싱 데이터 계산
+<pre><code>sensing_info = self.calc_sensing_data(car_next_state, 	car_current_state, backed_car_state, self.way_points,
+        check_point_index, progress)
+</code></pre>
