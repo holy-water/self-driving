@@ -21,6 +21,8 @@ To_middle < self.half_road_limit
 
 - 양 옆 박는 상황에 대한 판단 
 
+<hr>
+
 #### 19.7.16 연븐's 낙서 
 > 자율주행 소스에서 참고할만한 것들 정리
 
@@ -50,6 +52,8 @@ To_middle < self.half_road_limit
 <pre><code>sensing_info = self.calc_sensing_data(car_next_state, 	car_current_state, backed_car_state, self.way_points,
         check_point_index, progress)
 </code></pre>
+
+<hr>
 
 #### 19.7.17 연븐's 낙서
 > 장애물 회피 및 복구 시나리오 
