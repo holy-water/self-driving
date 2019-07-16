@@ -50,3 +50,24 @@ To_middle < self.half_road_limit
 <pre><code>sensing_info = self.calc_sensing_data(car_next_state, 	car_current_state, backed_car_state, self.way_points,
         check_point_index, progress)
 </code></pre>
+
+#### 19.7.17 연븐's 낙서
+> 장애물 회피 및 복구 시나리오 
+erms : 자가진단, 동영상, 채팅, faq, 삼성멤버스 
+
+1. 피하지 않아도 되는 상황 
+- 차량 폭의 절반 : 1.25
+- abs(장애물의 to_middle - 차량의 to_middle) < 1.25 이면 피해야 하고, 그렇지 않으면 걍 주행 
+
+2. 박은상황을 판별 
+- collided = true
+- collision_distance < 10 && speed < 10 -> collision_distance가 10 이상이 되면 박은 상황 해제 
+
+3. 박았을 때 복구 : 피할 수 있는 지점까지 복구 
+- steering과 throttle 값 변경 
+- throttle < 0 
+- 우선 steering은 기존값 그대로 : 박은 경로 대로 빠지는지 확인 필요 
+
+4. 박은상황 해제되면 다시 회피 로직을 탈 수 있도록 
+
+> 코너링 
