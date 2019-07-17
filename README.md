@@ -76,4 +76,14 @@ erms : 자가진단, 동영상, 채팅, faq, 삼성멤버스
 
 <hr/>
 
+#### 19.7.17 연븐성수's 낙서
 > 코너링 
+- 어찌 어째 됨. moving_angle - front_angle[0] 로 했음. 왜 되는지는 모름. 알려줘
+
+> 피하지 않아도 되는 상황 업데이트 
+- 현재 각도로 주행했을 때 장애물 지점에 도달하는 to_middle값을 예측해야한다. 
+- moving_angle 고려해야함
+- 변화되는 to_middle값을 x로 두었을 때 : x = obstacle_distance / tan(moving_angle) 일거 같음
+- 현재의 to_middle - x? 현재의 to_middle + x ? 
+- 위에 값을 기준으로 장애물의 middle과 미래 차량의 to_middle 간의 간격이 차량 폭보다 더 크면 됨 
+- 계산 좀.....
