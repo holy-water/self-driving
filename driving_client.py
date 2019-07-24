@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 
 # 제한 속도
-SPEED_LIMIT = 70
+SPEED_LIMIT = 100
 
 logging.basicConfig(filename='{}.log'.format(datetime.now().strftime('%Y-%m-%d-%H-%M')), level=logging.DEBUG)
 
@@ -48,7 +48,7 @@ class DrivingClient(DrivingController):
         logging.debug("=========================================================")
 
         ###########################################################################
-
+        emergency_break = False
         # 1. 박았는지 상태 체크
         # 1-1. 장애물에 박았을 때
         if is_collided(self, sensing_info):
@@ -64,18 +64,26 @@ class DrivingClient(DrivingController):
 
             # 3. 직선, 코너 주행 확인
             else:
-                speed = max(sensing_info.speed, 50)
-                angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / speed
-                middle = -sensing_info.to_middle / (speed / 5)
+                for i in range(2):
+                    if abs(sensing_info.track_forward_angles[i]) > 20:
+                        emergency_break = True
+                        break
+
+                angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / 110
+                middle = -sensing_info.to_middle / 50
 
                 # 각 앵글값 및 미들값으로 구한 핸들값 중 더 큰 값을 선택
-                car_controls.steering = angle if abs(angle) > abs(middle) else middle
-
+                # car_controls.steering = angle if abs(angle) > abs(middle) else middle
+                car_controls.steering = angle + middle if angle + middle < 1 else 1
+                if emergency_break:
+                    car_controls.steering = car_controls.steering + (sensing_info.speed / 250) if car_controls.steering > 0 else car_controls.steering - (sensing_info.speed / 250)
             # 4. 상대 차량이 있다면 추월 가능한지
 
             # 제한 속도 이상이면 악셀값 조정
             car_controls.throttle = 0 if sensing_info.speed > SPEED_LIMIT else 1
             car_controls.brake = 0
+            if emergency_break and car_controls.throttle == 1 and sensing_info.speed > 60:
+                car_controls.throttle = 0
 
         logging.debug("steering:{}, throttle:{}, brake:{}".format(car_controls.steering, car_controls.throttle, car_controls.brake))
 
@@ -116,7 +124,7 @@ def is_avoid_obstacles(sensing_info):
         # 가장 가까운 장애물과의 거리 확인
         if 5 < sensing_info.track_forward_obstacles[0]['dist'] < sensing_info.speed * 0.4:
             # 피하지 않아도 되는지 확인
-            if abs(sensing_info.track_forward_obstacles[0]['to_middle'] - sensing_info.to_middle) > 2.5:
+            if abs(sensing_info.track_forward_obstacles[0]['to_middle'] - sensing_info.to_middle) > 3:
                 return False
             return True
     return False
@@ -124,9 +132,12 @@ def is_avoid_obstacles(sensing_info):
 
 # 기본적으로 장애물의 반대로 이동, 중간에 위치할 경우 왼쪽 or 오른쪽 구석으로 이동
 def avoid_obstacles(self, sensing_info):
-    steering = -sensing_info.track_forward_obstacles[0]['to_middle'] / 25
+    steering = -sensing_info.track_forward_obstacles[0]['to_middle'] / 50
     if abs(sensing_info.track_forward_obstacles[0]['to_middle']) < 2.5:
-        steering = (sensing_info.to_middle - (self.half_road_limit / 3)) / 10
+        if sensing_info.to_middle > 0:
+            steering = (sensing_info.to_middle + (self.half_road_limit / 3)) / 60
+        else:
+            steering = (sensing_info.to_middle - (self.half_road_limit / 3)) / 60
     return steering
 
 
