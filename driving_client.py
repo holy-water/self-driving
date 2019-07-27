@@ -1,6 +1,8 @@
-from drive_controller import DrivingController
-from datetime import datetime
+import math
 import logging
+from datetime import datetime
+
+from drive_controller import DrivingController
 
 # 제한 속도
 SPEED_LIMIT = 100
@@ -70,7 +72,7 @@ class DrivingClient(DrivingController):
                         break
 
                 angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / 110
-                middle = -sensing_info.to_middle / 50
+                middle = -sensing_info.to_middle / 50 if abs(sensing_info.to_middle) > self.half_road_limit - 3 else 0
 
                 # 각 앵글값 및 미들값으로 구한 핸들값 중 더 큰 값을 선택
                 # car_controls.steering = angle if abs(angle) > abs(middle) else middle
@@ -122,10 +124,19 @@ def is_avoid_obstacles(sensing_info):
     # 전방에 장애물이 하나이상 있는지 확인
     if len(sensing_info.track_forward_obstacles) > 0:
         # 가장 가까운 장애물과의 거리 확인
-        if 5 < sensing_info.track_forward_obstacles[0]['dist'] < sensing_info.speed * 0.4:
+        if 5 < sensing_info.track_forward_obstacles[0]['dist'] < sensing_info.speed * 0.8:
+            logging.debug("장애물 발견")
+            print("장애물 발견")
             # 피하지 않아도 되는지 확인
-            if abs(sensing_info.track_forward_obstacles[0]['to_middle'] - sensing_info.to_middle) > 3:
+            tangent = math.tan(math.radians(sensing_info.moving_angle))
+            temp_to_middle = sensing_info.track_forward_obstacles[0]['dist'] * tangent
+            if abs(sensing_info.to_middle + temp_to_middle - sensing_info.track_forward_obstacles[0]['to_middle']) > 3:
+                logging.debug("그냥 가세요")
+                print("그냥 가세요")
                 return False
+            logging.debug("피해라")
+            logging.debug("temp_to_middle:{}".format(temp_to_middle))
+            print("피해라")
             return True
     return False
 
