@@ -1,6 +1,7 @@
 from drive_controller import DrivingController
 from datetime import datetime
 import logging
+import math
 
 logging.basicConfig(filename='{}.log'.format(datetime.now().strftime('%Y-%m-%d-%H-%M')), level=logging.DEBUG)
 
@@ -20,10 +21,11 @@ class DrivingClient(DrivingController):
         #         # Editing area ends
         #         # ==========================================================#
         super().__init__()
+        self.speed_list = []
         # 제한 속도 할당
         self.limit_speed = 100
         # 도로 범위 할당
-        track_range = int((self.half_road_limit - 1.25) * 2 / 2.5)
+        track_range = int((self.half_road_limit - 1.25) * 2 / 3)
         self.track_range = track_range if track_range % 2 != 0 else track_range - 1
         # 이전 도로 번호 할당
         self.previous_track_number = int(self.track_range / 2) + 1
@@ -52,10 +54,23 @@ class DrivingClient(DrivingController):
 
         ###########################################################################
 
+        self.speed_list.append(sensing_info.speed)
+        self.speed_list = self.speed_list[1:] if len(self.speed_list) > 10 else self.speed_list
+
+        # 충돌 상황일 때
+        # if sensing_info.collided or not sensing_info.moving_forward \
+        #         or (len(list(speed for speed in self.speed_list[-10:] if speed < 1)) > 9 and sensing_info.lap_progress > 5):
+        #     self.collision_flag = True
+        #
+        # if self.collision_flag:
+        #     if not is_avoid_collided_state(self, sensing_info):
+        #         car_controls.throttle = -0.5
+        #         car_controls.steering = sensing_info.moving_angle / 50
+        # else:
         # 핸들 값 할당
         car_controls.steering = calculate_steering(self, sensing_info)
         # 속도 조절
-        car_controls.throttle = 1 if sensing_info.speed < self.limit_speed else 0
+        car_controls.throttle = 1 if sensing_info.speed < get_limit_speed(sensing_info) else 0
 
         logging.debug("steering:{}, throttle:{}, brake:{}".format(car_controls.steering, car_controls.throttle,
                                                                   car_controls.brake))
@@ -80,14 +95,14 @@ class DrivingClient(DrivingController):
 def calculate_steering(self, sensing_info):
     # 도로 번호에 맞는 중앙값 선택
     track_number = select_track_number(self, sensing_info)
-    to_middle = (track_number - (int(self.track_range / 2) + 1)) * self.track_range * 0.6
+    to_middle = (track_number - (int(self.track_range / 2) + 1)) * self.track_range * 0.8
     # 현재 중앙값에 맞는 핸들값 할당
     middle = -(sensing_info.to_middle + to_middle) / (self.track_range * self.track_range)
     # 현재 도로 각도에 맞는 핸들값 할당
-    angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / 50
+    angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / 45
     # 코너에서 핸들값 가중치 할당
     angle_weight = calculate_angle_weight(sensing_info, angle)
-    return middle + angle + angle_weight
+    return middle + angle
 
 
 def select_track_number(self, sensing_info):
@@ -97,15 +112,17 @@ def select_track_number(self, sensing_info):
     middle_number = int(self.track_range / 2) + 1
     # 장애물이 있는 도로 번호 확인
     if len(sensing_info.track_forward_obstacles) > 0:
-        disable_track_number_list = get_disable_track_number_list(sensing_info, middle_number)
+        disable_track_number_list = get_disable_track_number_list(self, sensing_info, middle_number)
         if len(disable_track_number_list) > 0:
             if self.previous_track_number in disable_track_number_list:
                 mark = 1 if self.previous_track_number < middle_number else -1
                 for index in range(1, middle_number):
-                    if self.previous_track_number + (mark * index) not in disable_track_number_list:
+                    mark_plus = self.previous_track_number + (mark * index)
+                    mark_minus = self.previous_track_number - (mark * index)
+                    if mark_plus not in disable_track_number_list and 0 < mark_plus <= self.track_range:
                         track_number = self.previous_track_number + (mark * index)
                         break
-                    elif self.previous_track_number - (mark * index) not in disable_track_number_list:
+                    elif mark_minus not in disable_track_number_list and 0 < mark_minus <= self.track_range:
                         track_number = self.previous_track_number - (mark * index)
                         break
         print("disable_track_number_list : {}".format(disable_track_number_list))
@@ -116,46 +133,71 @@ def select_track_number(self, sensing_info):
     return track_number
 
 
-def get_disable_track_number_list(sensing_info, middle_number):
+def get_disable_track_number_list(self, sensing_info, middle_number):
     disable_track_number_list = []
-    for obstacle in sensing_info.track_forward_obstacles:
-        if obstacle['dist'] < sensing_info.speed * 5 / 18 * 1.5:
+    # 장애물 + 상대편 차량을 obstacle로 간주
+    obstacle = sensing_info.track_forward_obstacles + sensing_info.opponent_cars_info
+    obstacle = sorted(obstacle, key=lambda obs: obs['dist'])
+    for obstacle in obstacle:
+        if obstacle['dist'] < max(sensing_info.speed * 5 / 18 * 1.5, 30):
             for index in range(middle_number):
-                if abs(obstacle['to_middle']) == 0.04:
-                    print("들어옴")
-                if abs(obstacle['to_middle']) - 1 < 1.25 + (2.5 * index):
-                    if abs(obstacle['to_middle']) == 0.04:
-                        print("index -1: {}".format(index))
+                if abs(obstacle['to_middle']) - 1.5 < 1.5 + (3 * index):
                     if obstacle['to_middle'] > 0:
-                        disable_track_number_list.append(middle_number - index)
+                        if (middle_number - index) not in disable_track_number_list:
+                            disable_track_number_list.append(middle_number - index)
                         break
                     else:
-                        disable_track_number_list.append(middle_number + index)
+                        if (middle_number + index) not in disable_track_number_list:
+                            disable_track_number_list.append(middle_number + index)
                         break
             for index in range(middle_number):
-                if abs(obstacle['to_middle']) + 1 < 1.25 + (2.5 * index):
-                    if abs(obstacle['to_middle']) == 0.04:
-                        print("index +1: {}".format(index))
+                if abs(obstacle['to_middle']) + 1.5 < 1.5 + (3 * index):
                     if obstacle['to_middle'] > 0:
-                        disable_track_number_list.append(middle_number - index)
+                        if (middle_number - index) not in disable_track_number_list:
+                            disable_track_number_list.append(middle_number - index)
                         break
                     else:
-                        disable_track_number_list.append(middle_number + index)
+                        if (middle_number + index) not in disable_track_number_list:
+                            disable_track_number_list.append(middle_number + index)
                         break
         else:
             break
+    if self.track_range == len(disable_track_number_list):
+        del disable_track_number_list[len(disable_track_number_list) - 1]
     return disable_track_number_list
 
 
 def calculate_angle_weight(sensing_info, angle):
     weight = 0
     for i in range(2):
-        if abs(sensing_info.track_forward_angles[i]) > 23:
-            weight = (angle * abs(sensing_info.track_forward_angles[i])) / 23
+        if abs(sensing_info.track_forward_angles[i]) > 24:
+            weight = (angle * abs(sensing_info.track_forward_angles[i])) / 24
             if sensing_info.track_forward_angles[i] * angle < 0:
                 weight *= -1
             break
     return weight
+
+
+def get_limit_speed(sensing_info):
+    max_val = 0
+    for val in sensing_info.track_forward_angles:
+        if max_val < abs(val):
+            max_val = abs(val)
+    speed = max(120 * math.pow(math.e, -0.008 * max_val), 75)
+    return speed
+
+
+def is_avoid_collided_state(self, sensing_info):
+    track_number = select_track_number(self, sensing_info)
+    to_middle = (track_number - (int(self.track_range / 2) + 1)) * self.track_range * 0.6
+
+    # 현재 내 위치가 가야하는 트랙 위치 까지 왔을 때
+    if to_middle - 1.25 < sensing_info.to_middle < to_middle + 1.25 \
+            and sensing_info.moving_forward:
+        self.collision_flag = False
+        return True
+
+    return False
 
 
 if __name__ == '__main__':
