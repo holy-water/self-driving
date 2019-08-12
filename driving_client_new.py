@@ -16,6 +16,8 @@ class DrivingClient(DrivingController):
         self.is_debug = False
         self.collision_flag = False
         self.collision_time = 0
+        self.escape_flag = False
+        self.escape_time = 0
         self.moving_backward = False
         self.moving_backward_time = 0
         #
@@ -63,16 +65,18 @@ class DrivingClient(DrivingController):
                 self.collision_flag = True
                 self.collision_time = datetime.now()
 
-        # 충돌했을 경우 - 1초간 후진 / 방향 체크
+        # 충돌했을 경우 - 2초간 후진 / 방향 체크
         if self.collision_flag:
-            if self.collision_time + timedelta(milliseconds = 2000) > datetime.now():
+            if self.collision_time + timedelta(milliseconds=2000) > datetime.now():
                 car_controls.throttle = -0.5
             else:
-                # 1초 후 탈출 / 방향 체크 (정상 후진 중인지 판단)
+                # 2초 후 탈출 / 방향 체크 (정상 후진 중인지 판단)
                 if sensing_info.moving_forward:
                     self.moving_backward = True
                     self.moving_backward_time = datetime.now()
                 self.collision_flag = False
+                self.escape_flag = True
+                self.escape_time = datetime.now()
 
         # 역주행 상황 판단
         if not self.collision_flag and not self.moving_backward:
@@ -82,7 +86,7 @@ class DrivingClient(DrivingController):
 
         # 역주행 하고 있을 경우
         if not self.collision_flag and self.moving_backward:
-            if self.moving_backward_time + timedelta(milliseconds = 1000) > datetime.now():
+            if self.moving_backward_time + timedelta(milliseconds=1000) > datetime.now():
                 # 역주행 벗어나기
                 car_controls.steering = 1 if car_controls.steering > 0 else -1
                 car_controls.throttle = 0.3
@@ -96,8 +100,16 @@ class DrivingClient(DrivingController):
 
         # 탈출 / 일반적 상황
         if not self.collision_flag and not self.moving_backward:
+            if self.escape_flag:
+                if self.escape_time + timedelta(milliseconds=1000) > datetime.now():
+                    weight = 2
+                else:
+                    weight = 1
+                    self.escape_flag = False
+            else:
+                weight = 1
             # 핸들 값 할당
-            car_controls.steering = calculate_steering(self, sensing_info)
+            car_controls.steering = weight * calculate_steering(self, sensing_info)
             # 속도 조절
             car_controls.throttle = 1 if sensing_info.speed < get_limit_speed(sensing_info) else 0
 
