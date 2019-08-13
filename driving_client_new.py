@@ -140,8 +140,16 @@ def calculate_steering(self, sensing_info):
     # 현재 중앙값에 맞는 핸들값 할당
     middle = -(sensing_info.to_middle + to_middle) / (self.track_range * self.track_range)
     # 현재 도로 각도에 맞는 핸들값 할당
-    angle = -(sensing_info.moving_angle - sensing_info.track_forward_angles[0]) / 45
+    angle = -(sensing_info.moving_angle - get_angle_weight(self, sensing_info)) / 50
     return middle + angle
+
+
+def get_angle_weight(self, sensing_info):
+    angle_sum = 0
+    for index in range(1, 6):
+        angle_sum += sensing_info.track_forward_angles[index] - sensing_info.track_forward_angles[0]
+    angle_avg = angle_sum / 10
+    return sensing_info.track_forward_angles[0] + angle_avg
 
 
 def select_track_number(self, sensing_info):
@@ -165,16 +173,6 @@ def select_track_number(self, sensing_info):
                         track_number = self.previous_track_number - (mark * index)
                         break
         print("disable_track_number_list : {}".format(disable_track_number_list))
-    else:
-        if sensing_info.track_forward_angles[0] < -10 and track_number + 1 < self.track_range:
-            track_number += 1
-        elif sensing_info.track_forward_angles[0] > 10 and track_number - 1 > 1:
-            track_number -= 1
-        elif abs(sensing_info.track_forward_angles[0]) < 10:
-            if sensing_info.track_forward_angles[0] < 0 and track_number - 1 > 1:
-                track_number -= 1
-            elif sensing_info.track_forward_angles[0] > 0 and track_number + 1 < self.track_range:
-                track_number += 1
     print("previous_track_number : {}".format(self.previous_track_number))
     print("track_number : {}".format(track_number))
     # 현재 도로 번호 저장
@@ -221,7 +219,7 @@ def get_limit_speed(sensing_info):
     for val in sensing_info.track_forward_angles:
         if max_val < abs(val):
             max_val = abs(val)
-    speed = max(120 * math.pow(math.e, -0.01 * max_val), 80)
+    speed = max(150 * math.pow(math.e, -0.01 * max_val), 110)
     return speed
 
 
